@@ -4,68 +4,67 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-steps:
-- task: UseNode@2
-  inputs:
-    version: '14.x'
-
-- script: |
-    npm install
-    npm test
-    npm run build
-  displayName: 'Install dependencies, run tests, and build'
-
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '$(Build.SourcesDirectory)'
-    includeRootFolder: false
-    archiveType: 'zip'
-    archiveFile: '$(Build.ArtifactStagingDirectory)/myapp.zip'
-    replaceExistingArchive: true
-
-- publish: $(Build.ArtifactStagingDirectory)/myapp.zip
-  artifact: drop
-
 stages:
-- stage: QA
-  dependsOn: [Build]
+- stage: Build
   jobs:
-    - deployment: QA
-      environment: 'QA'
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-              - download: current
-                artifact: drop
-              - task: AzureWebApp@1
-                inputs:
-                  azureSubscription: '<Your Azure Subscription>'
-                  appName: '<Your App Service Name>'
-                  package: '$(Pipeline.Workspace)/drop/myapp.zip'
-              - script: |
-                  echo QA deployment completed.
-                displayName: 'QA Deployment'
+  - job: Build
+    steps:
+    - task: UseNode@2
+      inputs:
+        version: '14.x'
+    - script: |
+        npm install
+        npm test
+        npm run build
+      displayName: 'Install dependencies, run tests, and build'
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(Build.SourcesDirectory)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/myapp.zip'
+        replaceExistingArchive: true
+    - publish: $(Build.ArtifactStagingDirectory)/myapp.zip
+      artifact: drop
+
+- stage: QA
+  dependsOn: Build
+  jobs:
+  - deployment: QA
+    environment: 'QA'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: '<Your Azure Subscription>'
+              appName: '<Your QA App Service Name>'
+              package: '$(Pipeline.Workspace)/drop/myapp.zip'
+          - script: |
+              echo QA deployment completed.
+            displayName: 'QA Deployment'
 
 - stage: Production
   dependsOn: QA
   condition: succeeded()
   jobs:
-    - deployment: Production
-      environment: 'Production'
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-              - script: |
-                  echo Production deployment started.
-                displayName: 'Production Deployment'
-              - download: current
-                artifact: drop
-              - task: AzureWebApp@1
-                inputs:
-                  azureSubscription: '<Your Azure Subscription>'
-                  appName: '<Your App Service Name>'
-                  package: '$(Pipeline.Workspace)/drop/myapp.zip'
-                displayName: 'Deploy to Production'
-
+  - deployment: Production
+    environment: 'Production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+              echo Production deployment started.
+            displayName: 'Production Deployment'
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: '<Your Azure Subscription>'
+              appName: '<Your Production App Service Name>'
+              package: '$(Pipeline.Workspace)/drop/myapp.zip'
+            displayName: 'Deploy to Production'
